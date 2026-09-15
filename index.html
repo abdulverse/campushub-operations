@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#102a43" />
+    <title>CampusHub — Operations Master App</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .branch-selector { height: 36px; min-width: 145px; padding: 0 10px; border: 1px solid #d9e3ec; border-radius: 8px; background: #fff; color: #30465a; font: 600 12px 'DM Sans', sans-serif; cursor: pointer; }
+      .branch-context { color: #1877d3; font-weight: 600; }
+      .role-chip { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; border-radius: 14px; background: #f0ecff; color: #6741d9; font-size: 10px; font-weight: 700; }
+      .master-hero { padding: 24px; background: linear-gradient(125deg, #102a43, #1d5b83); color: #fff; overflow: hidden; position: relative; }
+      .master-hero:after { content: '✦'; position: absolute; right: 26px; top: -22px; color: #69c9e8; font-size: 150px; opacity: .18; }
+      .master-hero h2 { position: relative; z-index: 1; margin: 4px 0 8px; font-size: 25px; letter-spacing: -.5px; }
+      .master-hero p { position: relative; z-index: 1; max-width: 520px; margin: 0; color: #b8d7ea; font-size: 13px; }
+      .app-grid { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 16px; margin-top: 20px; }
+      .app-module { min-height: 205px; padding: 19px; cursor: pointer; transition: .18s; }
+      .app-module:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(16,42,67,.11); }
+      .app-module .module-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; font-size: 20px; }
+      .module-icon.transport { background: #e6f2fc; color: #1877d3; }.module-icon.grievance { background: #fff0e6; color: #c76c00; }.module-icon.tasks { background: #eeeafd; color: #6741d9; }
+      .app-module h2 { margin: 15px 0 5px; font-size: 17px; }.app-module p { margin: 0; color: #6d7a88; font-size: 12px; line-height: 1.45; }.app-module footer { display: flex; justify-content: space-between; align-items: center; margin-top: 17px; padding-top: 13px; border-top: 1px solid #e8edf1; color: #1877d3; font-size: 12px; font-weight: 600; }
+      .kanban { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 14px; }.kanban-column { padding: 13px; background: #eef3f7; border-radius: 10px; }.kanban-head { display: flex; justify-content: space-between; margin: 0 0 11px; color: #526273; font-size: 12px; font-weight: 700; }.task-card { padding: 12px; margin-top: 9px; border: 1px solid #e5eaf0; border-radius: 8px; background: #fff; box-shadow: 0 1px 3px rgba(16,42,67,.04); }.task-card h3 { margin: 0 0 6px; font-size: 12px; }.task-card p { margin: 0; color: #788695; font-size: 10px; line-height: 1.4; }.task-card footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }.task-card button { border: 0; background: transparent; color: #1877d3; padding: 0; font: 600 10px 'DM Sans'; cursor: pointer; }
+      @media (max-width: 650px) { .branch-selector { min-width: 112px; } }
+      @media (max-width: 850px) { .app-grid, .kanban { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="#master-dashboard" aria-label="CampusHub home"><span class="brand-mark">✦</span><span>campushub</span></a>
+        <div class="school-switch"><span class="school-initial">GV</span><span><strong>Green Valley Group</strong><small>Multi-branch schools</small></span><button aria-label="Switch school">⌄</button></div>
+        <nav class="nav" id="mainNav">
+          <p class="nav-label">MASTER APP</p>
+          <button class="nav-item active" data-view="master-dashboard"><span>▦</span> <b>Campus overview</b></button>
+          <button class="nav-item" data-view="dashboard"><span>▱</span> <b>Transport</b><i class="live-dot"></i></button>
+          <button class="nav-item" data-view="grievances"><span>◉</span> <b>Parent grievances</b><i class="nav-count alert">6</i></button>
+          <button class="nav-item" data-view="tasks"><span>✓</span> <b>Employee tasks</b><i class="nav-count">14</i></button>
+          <button class="nav-item" data-view="access-control"><span>♙</span> <b>Access & roles</b></button>
+          <p class="nav-label">TRANSPORT MODULE</p>
+          <button class="nav-item" data-view="fleet"><span>▱</span> <b>Fleet</b><i class="nav-count">18</i></button>
+          <button class="nav-item" data-view="daily-log"><span>▤</span> <b>Daily log</b></button>
+          <button class="nav-item" data-view="fuel"><span>◒</span> <b>Fuel</b></button>
+          <button class="nav-item" data-view="routes"><span>⌁</span> <b>Routes</b></button>
+          <p class="nav-label">PEOPLE & SAFETY</p>
+          <button class="nav-item" data-view="team"><span>♙</span> <b>Drivers & attendants</b></button>
+          <button class="nav-item" data-view="students"><span>♧</span> <b>Students</b></button>
+          <button class="nav-item" data-view="tracking"><span>⌖</span> <b>Live tracking</b><i class="live-dot"></i></button>
+          <button class="nav-item" data-view="maintenance"><span>⚙</span> <b>Maintenance</b></button>
+          <button class="nav-item" data-view="compliance"><span>✓</span> <b>Compliance</b></button>
+          <p class="nav-label">INSIGHTS</p>
+          <button class="nav-item" data-view="reports"><span>◫</span> <b>Reports</b></button>
+          <button class="nav-item" data-view="alerts"><span>◉</span> <b>Alerts</b><i class="nav-count alert">7</i></button>
+        </nav>
+        <div class="sidebar-footer"><button id="settingsButton" class="nav-item"><span>⚙</span> <b>Settings</b></button><div class="profile"><span class="profile-avatar">AK</span><span><strong>Arjun Kumar</strong><small>Transport Manager</small></span><b>⋮</b></div></div>
+      </aside>
+      <main id="appMain" tabindex="-1"></main>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <dialog id="modal"></dialog>
+    <script src="app.js"></script>
+  </body>
+</html>
