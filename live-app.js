@@ -9,7 +9,7 @@
   const state = {
     client: null, session: null, profile: null, membership: null, organization: null,
     scopes: [], branches: [], activeBranchId: '', buses: [], routes: [], employees: [],
-    logs: [], serviceDate: today(), view: 'fleet', revision: 0,
+    logs: [], serviceDate: today(), view: 'dashboard', revision: 0,
   };
   const roleCapabilities = {
     group_admin: ['*'],
@@ -112,13 +112,27 @@
       '<div class="brand"><span class="brand-mark">✦</span><span>campushub</span></div>' +
       '<div class="school-switch"><span class="school-initial">' + e(org.slice(0, 2).toUpperCase()) + '</span>' +
       '<span><strong>' + e(org) + '</strong><small>Protected live workspace</small></span></div>' +
-      '<nav class="nav"><p class="nav-label">LIVE TRANSPORT</p>' +
+      '<nav class="nav"><p class="nav-label">MASTER APP</p>' +
+      '<button class="nav-item ' + (state.view === 'dashboard' ? 'active' : '') + '" data-live-view="dashboard"><span>▦</span><b>Campus overview</b></button>' +
+      '<p class="nav-label">TRANSPORT</p>' +
       '<button class="nav-item ' + (state.view === 'fleet' ? 'active' : '') + '" data-live-view="fleet"><span>▱</span><b>Fleet</b></button>' +
       '<button class="nav-item ' + (state.view === 'daily-log' ? 'active' : '') + '" data-live-view="daily-log"><span>▤</span><b>Daily log</b></button>' +
+      '<button class="nav-item ' + (state.view === 'fuel' ? 'active' : '') + '" data-live-view="fuel"><span>◒</span><b>Fuel</b></button>' +
+      '<button class="nav-item ' + (state.view === 'routes' ? 'active' : '') + '" data-live-view="routes"><span>⌁</span><b>Routes</b></button>' +
       (can('*') ? '<button class="nav-item ' + (state.view === 'branches' ? 'active' : '') + '" data-live-view="branches"><span>⌘</span><b>Branches</b></button>' : '') +
-      '<p class="nav-label">NEXT MODULES</p><span class="nav-item nav-disabled"><span>◉</span><b>Parent grievances</b></span>' +
-      '<span class="nav-item nav-disabled"><span>✓</span><b>Employee tasks</b></span>' +
-      '<span class="nav-item nav-disabled"><span>⌖</span><b>Tracking & reports</b></span></nav>' +
+      '<p class="nav-label">PEOPLE & SAFETY</p>' +
+      '<button class="nav-item ' + (state.view === 'team' ? 'active' : '') + '" data-live-view="team"><span>♙</span><b>Drivers & attendants</b></button>' +
+      '<button class="nav-item ' + (state.view === 'students' ? 'active' : '') + '" data-live-view="students"><span>♧</span><b>Students</b></button>' +
+      '<button class="nav-item ' + (state.view === 'tracking' ? 'active' : '') + '" data-live-view="tracking"><span>⌖</span><b>Live tracking</b></button>' +
+      '<button class="nav-item ' + (state.view === 'maintenance' ? 'active' : '') + '" data-live-view="maintenance"><span>⚙</span><b>Maintenance</b></button>' +
+      '<button class="nav-item ' + (state.view === 'compliance' ? 'active' : '') + '" data-live-view="compliance"><span>✓</span><b>Compliance</b></button>' +
+      '<p class="nav-label">INSIGHTS</p>' +
+      '<button class="nav-item ' + (state.view === 'reports' ? 'active' : '') + '" data-live-view="reports"><span>◫</span><b>Reports</b></button>' +
+      '<button class="nav-item ' + (state.view === 'alerts' ? 'active' : '') + '" data-live-view="alerts"><span>◉</span><b>Alerts</b></button>' +
+      '<p class="nav-label">MASTER SERVICES</p>' +
+      '<button class="nav-item ' + (state.view === 'grievances' ? 'active' : '') + '" data-live-view="grievances"><span>◉</span><b>Parent grievances</b></button>' +
+      '<button class="nav-item ' + (state.view === 'tasks' ? 'active' : '') + '" data-live-view="tasks"><span>✓</span><b>Employee tasks</b></button>' +
+      '<button class="nav-item ' + (state.view === 'access' ? 'active' : '') + '" data-live-view="access"><span>♙</span><b>Access & roles</b></button></nav>' +
       '<div class="sidebar-footer"><div class="profile"><span class="profile-avatar">' + e(initials(person)) + '</span>' +
       '<span><strong>' + e(person) + '</strong><small>' + e(roleText) + '</small></span>' +
       '<button class="text-button" data-live-action="sign-out">Sign out</button></div></div></aside>' +
@@ -133,8 +147,40 @@
       main.innerHTML = '<section class="card live-empty"><h2>Select a branch</h2><p>This account has no active branch in its live access scope.</p></section>';
       return;
     }
-    main.innerHTML = state.view === 'daily-log' ? dailyMarkup() : state.view === 'branches' ? branchesMarkup() : fleetMarkup();
+    main.innerHTML = state.view === 'dashboard' ? dashboardMarkup() : state.view === 'daily-log' ? dailyMarkup() : state.view === 'branches' ? branchesMarkup() : state.view === 'fleet' ? fleetMarkup() : moduleMarkup(state.view);
     if (state.view === 'daily-log') setDailyDefaults();
+  }
+
+  function dashboardMarkup() {
+    const total = state.buses.length;
+    const active = state.buses.filter(item => item.status !== 'inactive').length;
+    return header('Campus overview', 'One secure workspace for every branch and school operation.') +
+      '<div class="summary-strip"><div class="card"><small>Live buses</small><strong>' + total + '</strong><span>' + e(branchName(state.activeBranchId)) + '</span></div>' +
+      '<div class="card"><small>Active today</small><strong>' + active + '</strong><span>Protected fleet records</span></div>' +
+      '<div class="card"><small>Daily logs</small><strong>' + state.logs.length + '</strong><span>Selected service date</span></div>' +
+      '<div class="card"><small>Branches</small><strong>' + state.branches.length + '</strong><span>Active workspace branches</span></div></div>' +
+      '<section class="card section-card"><div class="section-head"><div><h2>CampusHub modules</h2><p>Every demo option is preserved in the live workspace. Secure data workflows are being enabled module by module.</p></div></div>' +
+      '<div class="summary-strip"><div class="card"><small>Live now</small><strong>3</strong><span>Branches, fleet, daily log</span></div><div class="card"><small>Next rollout</small><strong>4</strong><span>Fuel, routes, team, access</span></div><div class="card"><small>Planned</small><strong>9</strong><span>Students, GPS, safety, reports</span></div><div class="card"><small>Security</small><strong>RLS</strong><span>Branch-scoped database rules</span></div></div></section>' +
+      '<section class="card section-card"><div class="section-head"><div><h2>What happens next</h2><p>Choose any module from the left. Live modules read and write Supabase records; planned modules show their data scope and rollout status.</p></div></div><div class="hint"><b>No sample data is being mixed into your live workspace.</b> This keeps original student, parent, employee, location, and finance data protected while each module is connected.</div></section>';
+  }
+
+  const moduleDetails = {
+    fuel: ['Fuel management', 'Diesel fills, vendors, efficiency, and cost per kilometre.', 'Fuel entries will calculate litres, amount, km/L, and cost/km from protected bus records.'],
+    routes: ['Route management', 'Stops, distance, expected timings, assignments, and deviation.', 'Routes will be branch-scoped and shared with daily logs and future GPS tracking.'],
+    team: ['Drivers & attendants', 'Employee profiles, licences, attendance, duty roster, and training.', 'Employee records will use role-based access and document-expiry alerts.'],
+    students: ['Student transport', 'Students, parents, routes, stops, allocations, and boarding records.', 'Student and parent data will be added only after its privacy and import workflow is enabled.'],
+    tracking: ['GPS & live tracking', 'Bus location, speed, stoppage, geofencing, and route deviation.', 'GPS devices and location retention rules must be configured before this screen becomes live.'],
+    maintenance: ['Maintenance', 'Preventive service, repairs, breakdowns, costs, and next-service alerts.', 'Maintenance history will link to buses and generate KM-based reminders.'],
+    compliance: ['Compliance', 'Fitness, insurance, permit, pollution, RC, licences, and expiry alerts.', 'Documents will be stored with expiry dates and restricted employee access.'],
+    reports: ['Reports & analytics', 'Daily/monthly kilometres, fuel, expenses, downtime, and attendance.', 'Reports will be calculated from live tables after the supporting modules are enabled.'],
+    alerts: ['Alerts & notifications', 'Expiry, service, fuel, breakdown, deviation, late arrival, and missing-log alerts.', 'Alerts will be generated from validated live records—not demo counters.'],
+    grievances: ['Parent grievances', 'Receive, assign, track, resolve, and export parent concerns.', 'The secure grievance workflow is planned next with branch scope, status, and audit history.'],
+    tasks: ['Employee tasks', 'Assign work, track ownership, due dates, progress, and blockers.', 'The task board will use the same employee and branch permissions as transport.'],
+    access: ['Access & roles', 'Role-based employee access with branch-level data scope.', 'Group administrator access is live in the database; the management form will be enabled with the employee module.'],
+  };
+  function moduleMarkup(view) {
+    const detail = moduleDetails[view] || ['CampusHub module', 'Secure operations workspace.', 'This module is being prepared.'];
+    return header(detail[0], detail[1]) + '<section class="card live-empty"><span class="live-state-icon">✦</span><h2>Module ready for secure rollout</h2><p>' + e(detail[2]) + '</p><div class="hint"><b>Your demo design is retained.</b> The live release will replace sample rows with real branch-scoped records as this module is connected.</div></section>';
   }
 
   function branchesMarkup() {
@@ -294,7 +340,7 @@
       if (view === 'daily-log') {
         await Promise.all([loadFleet(revision), loadDailySupport(revision)]);
         if (!stale(revision)) await loadLogs(revision);
-      } else {
+      } else if (view === 'fleet' || view === 'dashboard') {
         await loadFleet(revision);
       }
       if (!stale(revision)) shell();
