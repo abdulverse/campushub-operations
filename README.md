@@ -1,21 +1,16 @@
-# CampusHub — School Operations Master App
+# CampusHub live setup
 
-CampusHub is a responsive, front-end prototype for managing multi-branch school operations from one place.
+The first migration creates protected empty tables and row-level access rules.
+It does not import student, parent, employee, or vehicle data.
 
-## Apps included
+1. In Supabase SQL Editor, run `migrations/001_initial_schema.sql`.
+2. In Supabase Authentication, invite or create the first CampusHub owner login.
+   Use a real school-controlled email address and keep sign-up invite-only.
+3. In `bootstrap-first-admin.sql`, replace the three placeholder values, then
+   run it in SQL Editor. This assigns that account the cross-branch
+   `group_admin` role for the named organisation.
+4. Sign in with the owner account and test the empty application before
+   importing any original school data.
 
-- **Transport Manager** — fleet, daily four-run logs, parking rules, fuel, routes, students, GPS-style tracking, maintenance, compliance, reports, and alerts.
-- **Parent Grievances** — receive, assign, track, resolve, and export parent concerns.
-- **Employee Tasks** — organise school work by owner, due date, and progress.
-- **Access & Roles** — preview and apply role-based app access with branch-level data scope.
-
-## Run locally
-
-Open `index.html` in any modern browser. No installation or server is needed.
-
-## Prototype notes
-
-- The data is realistic sample data stored only for the active browser session.
-- CSV exports work locally in the browser.
-- The role preview demonstrates how navigation and branch access are restricted. A production release should connect this model to secure server-side authentication and a database.
-- This repository is safe to publish as a **demo only**. Do not add real student, parent, employee, location, or financial data to this browser-only build.
+Never add a database password or `service_role` key to the browser, GitHub, or
+this repository. The public browser key is only added after the RLS checks pass.

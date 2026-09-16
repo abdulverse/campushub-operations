@@ -26,41 +26,23 @@
       .kanban { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 14px; }.kanban-column { padding: 13px; background: #eef3f7; border-radius: 10px; }.kanban-head { display: flex; justify-content: space-between; margin: 0 0 11px; color: #526273; font-size: 12px; font-weight: 700; }.task-card { padding: 12px; margin-top: 9px; border: 1px solid #e5eaf0; border-radius: 8px; background: #fff; box-shadow: 0 1px 3px rgba(16,42,67,.04); }.task-card h3 { margin: 0 0 6px; font-size: 12px; }.task-card p { margin: 0; color: #788695; font-size: 10px; line-height: 1.4; }.task-card footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }.task-card button { border: 0; background: transparent; color: #1877d3; padding: 0; font: 600 10px 'DM Sans'; cursor: pointer; }
       @media (max-width: 650px) { .branch-selector { min-width: 112px; } }
       @media (max-width: 850px) { .app-grid, .kanban { grid-template-columns: 1fr; } }
+      /* Live mode deliberately starts with an authentication gate rather than demo data. */
+      .auth-page,.live-state{min-height:100vh;display:grid;place-items:center;padding:24px;background:linear-gradient(135deg,#eef6fb,#f7f9fc)}
+      .auth-card,.live-state-card{width:min(100%,430px);padding:32px;border:1px solid #e4ebf1;border-radius:16px;background:#fff;box-shadow:0 18px 45px #102a4317}
+      .auth-brand{display:flex;align-items:center;gap:7px;font-size:21px;color:#102a43}.auth-brand .brand-mark{margin:0}.eyebrow{margin:27px 0 7px;color:#1877d3;font:600 10px 'DM Mono',monospace;letter-spacing:1px}
+      .auth-card h1,.live-state-card h1{margin:0;font-size:25px;letter-spacing:-.5px}.auth-card>p:not(.eyebrow),.live-state-card p{color:#687789;font-size:13px;line-height:1.5}
+      .auth-form{display:grid;gap:15px;margin-top:23px}.auth-form label{display:grid;gap:6px;color:#506174;font-size:12px;font-weight:600}.auth-form input{height:40px;border:1px solid #dce4eb;border-radius:8px;padding:0 11px;font:14px 'DM Sans';outline:none}.auth-form .button{margin-top:4px;height:42px}.auth-help{margin:20px 0 0!important;font-size:11px!important}
+      .live-state-card{text-align:center}.live-state-icon{display:grid;place-items:center;width:45px;height:45px;margin:0 auto 15px;border-radius:12px;background:#eaf4ff;color:#1877d3;font-size:24px}.live-spinner{display:inline-block;width:24px;height:24px;margin:0 auto 16px;border:3px solid #d8e8f5;border-top-color:#1877d3;border-radius:50%;animation:campushub-spin .8s linear infinite}.live-empty{padding:28px;text-align:center;color:#687789}.live-empty h2{margin:0 0 7px;color:#26384a}.live-empty p{margin:0}
+      .nav-disabled{opacity:.47;cursor:default}.nav-disabled:hover{background:transparent;color:#c9d9e6}.live-branch-control{display:grid;gap:3px;color:#687789;font-size:10px;font-weight:600}.live-branch-control select{height:35px;min-width:150px;border:1px solid #dce4eb;border-radius:8px;padding:0 8px;background:#fff;color:#314154;font:600 12px 'DM Sans'}
+      @keyframes campushub-spin{to{transform:rotate(360deg)}}@media(max-width:650px){.auth-page,.live-state{padding:16px}.auth-card,.live-state-card{padding:25px 21px}.live-branch-control,.live-branch-control select{width:100%}.head-actions{width:100%}}
     </style>
   </head>
   <body>
-    <div class="app">
-      <aside class="sidebar" aria-label="Primary navigation">
-        <a class="brand" href="#master-dashboard" aria-label="CampusHub home"><span class="brand-mark">✦</span><span>campushub</span></a>
-        <div class="school-switch"><span class="school-initial">GV</span><span><strong>Green Valley Group</strong><small>Multi-branch schools</small></span><button aria-label="Switch school">⌄</button></div>
-        <nav class="nav" id="mainNav">
-          <p class="nav-label">MASTER APP</p>
-          <button class="nav-item active" data-view="master-dashboard"><span>▦</span> <b>Campus overview</b></button>
-          <button class="nav-item" data-view="dashboard"><span>▱</span> <b>Transport</b><i class="live-dot"></i></button>
-          <button class="nav-item" data-view="grievances"><span>◉</span> <b>Parent grievances</b><i class="nav-count alert">6</i></button>
-          <button class="nav-item" data-view="tasks"><span>✓</span> <b>Employee tasks</b><i class="nav-count">14</i></button>
-          <button class="nav-item" data-view="access-control"><span>♙</span> <b>Access & roles</b></button>
-          <p class="nav-label">TRANSPORT MODULE</p>
-          <button class="nav-item" data-view="fleet"><span>▱</span> <b>Fleet</b><i class="nav-count">18</i></button>
-          <button class="nav-item" data-view="daily-log"><span>▤</span> <b>Daily log</b></button>
-          <button class="nav-item" data-view="fuel"><span>◒</span> <b>Fuel</b></button>
-          <button class="nav-item" data-view="routes"><span>⌁</span> <b>Routes</b></button>
-          <p class="nav-label">PEOPLE & SAFETY</p>
-          <button class="nav-item" data-view="team"><span>♙</span> <b>Drivers & attendants</b></button>
-          <button class="nav-item" data-view="students"><span>♧</span> <b>Students</b></button>
-          <button class="nav-item" data-view="tracking"><span>⌖</span> <b>Live tracking</b><i class="live-dot"></i></button>
-          <button class="nav-item" data-view="maintenance"><span>⚙</span> <b>Maintenance</b></button>
-          <button class="nav-item" data-view="compliance"><span>✓</span> <b>Compliance</b></button>
-          <p class="nav-label">INSIGHTS</p>
-          <button class="nav-item" data-view="reports"><span>◫</span> <b>Reports</b></button>
-          <button class="nav-item" data-view="alerts"><span>◉</span> <b>Alerts</b><i class="nav-count alert">7</i></button>
-        </nav>
-        <div class="sidebar-footer"><button id="settingsButton" class="nav-item"><span>⚙</span> <b>Settings</b></button><div class="profile"><span class="profile-avatar">AK</span><span><strong>Arjun Kumar</strong><small>Transport Manager</small></span><b>⋮</b></div></div>
-      </aside>
-      <main id="appMain" tabindex="-1"></main>
-    </div>
+    <div id="campusHubRoot" aria-live="polite"></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <dialog id="modal"></dialog>
-    <script src="app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="live-app.js"></script>
   </body>
 </html>
