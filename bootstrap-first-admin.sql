@@ -6,9 +6,9 @@
 
 do $$
 declare
-  v_owner_email text := 'abdulnarayanagroup@gmail.com';
-  v_organization_name text := 'abdulcampushub';
-  v_branch_names text[] := array['Sambalpur Firststep'];
+  v_owner_email text := 'OWNER_EMAIL_HERE';
+  v_organization_name text := 'SCHOOL_GROUP_NAME_HERE';
+  v_branch_names text[] := array['FIRST_BRANCH_NAME_HERE'];
   v_user_id uuid;
   v_organization_id uuid;
   v_membership_id uuid;
