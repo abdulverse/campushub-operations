@@ -9,7 +9,8 @@
   const state = {
     client: null, session: null, profile: null, membership: null, organization: null,
     scopes: [], branches: [], activeBranchId: '', buses: [], routes: [], employees: [],
-    logs: [], serviceDate: today(), view: 'dashboard', revision: 0,
+    logs: [], accessDirectory: [], serviceDate: today(), view: 'dashboard', revision: 0,
+    driver: { busId: '', sessionStartedAt: null, openingOdometer: null, currentTripIndex: 0, tripTimes: {}, position: null, watchId: null, error: '' },
   };
   const roleCapabilities = {
     group_admin: ['*'],
@@ -116,6 +117,7 @@
       '<button class="nav-item ' + (state.view === 'dashboard' ? 'active' : '') + '" data-live-view="dashboard"><span>▦</span><b>Campus overview</b></button>' +
       '<p class="nav-label">TRANSPORT</p>' +
       '<button class="nav-item ' + (state.view === 'fleet' ? 'active' : '') + '" data-live-view="fleet"><span>▱</span><b>Fleet</b></button>' +
+      '<button class="nav-item ' + (state.view === 'driver-app' ? 'active' : '') + '" data-live-view="driver-app"><span>◉</span><b>Driver app</b></button>' +
       '<button class="nav-item ' + (state.view === 'daily-log' ? 'active' : '') + '" data-live-view="daily-log"><span>▤</span><b>Daily log</b></button>' +
       '<button class="nav-item ' + (state.view === 'fuel' ? 'active' : '') + '" data-live-view="fuel"><span>◒</span><b>Fuel</b></button>' +
       '<button class="nav-item ' + (state.view === 'routes' ? 'active' : '') + '" data-live-view="routes"><span>⌁</span><b>Routes</b></button>' +
@@ -147,7 +149,7 @@
       main.innerHTML = '<section class="card live-empty"><h2>Select a branch</h2><p>This account has no active branch in its live access scope.</p></section>';
       return;
     }
-    main.innerHTML = state.view === 'dashboard' ? dashboardMarkup() : state.view === 'daily-log' ? dailyMarkup() : state.view === 'branches' ? branchesMarkup() : state.view === 'fleet' ? fleetMarkup() : moduleMarkup(state.view);
+    main.innerHTML = state.view === 'dashboard' ? dashboardMarkup() : state.view === 'daily-log' ? dailyMarkup() : state.view === 'branches' ? branchesMarkup() : state.view === 'fleet' ? fleetMarkup() : state.view === 'driver-app' ? driverAppMarkup() : state.view === 'access' ? accessMarkup() : moduleMarkup(state.view);
     if (state.view === 'daily-log') setDailyDefaults();
   }
 
@@ -183,6 +185,36 @@
     return header(detail[0], detail[1]) + '<section class="card live-empty"><span class="live-state-icon">✦</span><h2>Module ready for secure rollout</h2><p>' + e(detail[2]) + '</p><div class="hint"><b>Your demo design is retained.</b> The live release will replace sample rows with real branch-scoped records as this module is connected.</div></section>';
   }
 
+  function accessMarkup() {
+    if (!can('*')) return header('Access & roles', 'Role-based employee access with branch-level data scope.') + '<section class="card live-empty"><span class="live-state-icon">⌾</span><h2>Group administrator access required</h2><p>Only a group administrator can add employees and change their permissions.</p></section>';
+    const branchOptions = '<option value="">Select branch</option>' + state.branches.map(item => '<option value="' + e(item.id) + '">' + e(item.name) + '</option>').join('');
+    const rows = state.accessDirectory.length ? state.accessDirectory.map(item =>
+      '<tr><td><b class="strong">' + e(item.full_name || 'Unnamed employee') + '</b><br><small>' + e(item.email || '—') + '</small></td>' +
+      '<td>' + e(item.employee_code || '—') + '</td><td><span class="role-chip">' + e(titleRole(item.role)) + '</span></td>' +
+      '<td>' + e(item.branch_name || 'All branches') + '</td><td><span class="status">' + (item.active ? 'Active' : 'Inactive') + '</span></td></tr>'
+    ).join('') : '<tr><td colspan="5" class="live-table-empty">No employee access records have been added yet.</td></tr>';
+    return header('Access & roles', 'Add an employee and assign their role and branch in one secure step.') +
+      '<section class="card section-card access-card"><div class="section-head"><div><h2>Add employee access</h2><p>The employee must already have a CampusHub sign-in invitation. Their role and branch permissions are saved together here.</p></div></div>' +
+      '<div class="hint"><b>First-time setup:</b> invite the employee email from Supabase Authentication, then enter that same email below. They can sign in immediately after the role is saved.</div>' +
+      '<form id="accessForm" class="form-grid access-form"><div class="field"><label>Employee email *<input name="email" type="email" required placeholder="driver@example.com"></label></div>' +
+      '<div class="field"><label>Full name *<input name="full_name" required placeholder="Employee name"></label></div>' +
+      '<div class="field"><label>Employee code<input name="employee_code" placeholder="DRV-001"></label></div>' +
+      '<div class="field"><label>Role *<select name="role" id="accessRole" required><option value="branch_admin">Branch admin</option><option value="transport_manager">Transport manager</option><option value="driver_attendant">Driver / attendant</option><option value="grievance_officer">Grievance officer</option><option value="task_manager">Task manager</option><option value="group_admin">Group administrator</option></select></label></div>' +
+      '<div class="field"><label>Branch *<select name="branch_id" id="accessBranch" required>' + branchOptions + '</select></label></div>' +
+      '<div class="form-actions full"><button class="button primary" type="submit">Save access</button></div></form></section>' +
+      '<section class="card section-card"><div class="section-head"><div><h2>Employee access directory</h2><p>Each row shows the account, role, and branch scope currently granted.</p></div></div><div class="table-wrap"><table><thead><tr><th>EMPLOYEE</th><th>CODE</th><th>ROLE</th><th>BRANCH SCOPE</th><th>STATUS</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>';
+  }
+
+  function syncAccessRole(form) {
+    const role = form?.elements?.role?.value;
+    const branch = form?.elements?.branch_id;
+    if (!branch) return;
+    const orgWide = role === 'group_admin';
+    branch.disabled = orgWide;
+    branch.required = !orgWide;
+    if (orgWide) branch.value = '';
+  }
+
   function branchesMarkup() {
     const rows = state.branches.length ? state.branches.map(item =>
       '<tr><td><b class="strong">' + e(item.name) + '</b></td><td>' + e(item.code || '—') + '</td><td>' +
@@ -212,6 +244,65 @@
       rows + '</tbody></table></div></section>';
   }
 
+  function driverTrips(busRecord) {
+    const mode = busRecord?.shift_mode || 'two_shifts';
+    const parking = busRecord?.parking_location || 'inside_campus';
+    const trips = [];
+    if (mode !== 'afternoon_only') {
+      if (parking === 'inside_campus') trips.push({ key: 'school-1-out', label: 'Trip 1 · Out to pick students', kind: 'to_school', number: 1 });
+      trips.push({ key: 'school-1-in', label: 'Trip 1 · Incoming with students', kind: 'to_school', number: 1 });
+      trips.push({ key: 'school-2-out', label: 'Trip 2 · Out to pick students', kind: 'to_school', number: 2 });
+      trips.push({ key: 'school-2-in', label: 'Trip 2 · Incoming with students', kind: 'to_school', number: 2 });
+    }
+    if (mode !== 'morning_only') {
+      trips.push({ key: 'home-1-out', label: 'Trip 1 · Out for student drop', kind: 'to_home', number: 1 });
+      trips.push({ key: 'home-1-in', label: 'Trip 1 · Incoming after drop', kind: 'to_home', number: 1 });
+      trips.push({ key: 'home-2-out', label: 'Trip 2 · Out for student drop', kind: 'to_home', number: 2 });
+      trips.push({ key: 'home-2-in', label: 'Trip 2 · Incoming after drop', kind: 'to_home', number: 2 });
+    }
+    return trips;
+  }
+  function driverStore() {
+    try { localStorage.setItem('campusHubDriverSession', JSON.stringify({ ...state.driver, watchId: null })); } catch (_) { /* private browsing can block storage */ }
+  }
+  function driverStopGps() {
+    if (state.driver.watchId != null && navigator.geolocation) navigator.geolocation.clearWatch(state.driver.watchId);
+    state.driver.watchId = null;
+  }
+  function driverStartGps() {
+    state.driver.error = '';
+    if (!navigator.geolocation) { state.driver.error = 'GPS is not available on this phone.'; renderView(); return; }
+    driverStopGps();
+    state.driver.watchId = navigator.geolocation.watchPosition(position => {
+      state.driver.position = { latitude: position.coords.latitude, longitude: position.coords.longitude, speed: position.coords.speed == null ? null : position.coords.speed * 3.6, recordedAt: new Date().toISOString() };
+      driverStore();
+      renderView();
+    }, error => {
+      state.driver.error = error.code === 1 ? 'Location permission is needed to track this trip.' : 'GPS signal is not available yet.';
+      renderView();
+    }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 });
+  }
+  function driverAppMarkup() {
+    const busRecord = bus(state.driver.busId) || state.buses[0];
+    const trips = driverTrips(busRecord);
+    if (busRecord && !state.driver.busId) state.driver.busId = busRecord.id;
+    const started = Boolean(state.driver.sessionStartedAt);
+    const current = trips[state.driver.currentTripIndex];
+    const activeTrip = current && state.driver.tripTimes[current.key]?.startedAt && !state.driver.tripTimes[current.key]?.arrivedAt;
+    const finished = started && !current;
+    const modeText = ({ two_shifts: 'Two shifts · morning + afternoon', morning_only: 'Single shift · morning pickup', afternoon_only: 'Single shift · afternoon drop' })[busRecord?.shift_mode || 'two_shifts'];
+    const busOptions = options(state.buses, item => item.bus_code + ' · ' + item.registration_number);
+    let body = '';
+    if (!state.buses.length) body = '<section class="card live-empty"><span class="live-state-icon">◉</span><h2>No bus assigned yet</h2><p>A manager must assign a bus to this driver before duty can start.</p></section>';
+    else if (!started) body = '<section class="card driver-start-card"><div class="driver-badge">DRIVER MODE</div><h2>Start today’s duty</h2><p>Open the bus, enter the starting odometer, and the trip buttons will appear in the correct order.</p><form id="driverStartForm" class="driver-form"><label>Bus<select name="bus_id" id="driverBus">' + busOptions + '</select></label><div class="driver-bus-facts"><span>Shift pattern<strong id="driverShiftText">' + e(modeText) + '</strong></span><span>Parking<strong>' + e(busRecord?.parking_location === 'outside_campus' ? 'Outside campus' : 'Inside campus') + '</strong></span></div><label>Starting odometer (km)<input name="opening_odometer" type="number" min="0" step="0.1" required value="' + e(busRecord?.current_odometer_km ?? '') + '"></label><button class="button primary driver-cta" type="submit">Start duty</button></form></section>';
+    else body = '<section class="card driver-live-card"><div class="driver-live-head"><div><div class="driver-badge">DUTY ACTIVE</div><h2>' + e(busRecord?.bus_code || 'Assigned bus') + '</h2><p>Opening odometer: <b>' + e(state.driver.openingOdometer) + ' km</b> · ' + e(modeText) + '</p></div><span class="gps-pill ' + (activeTrip ? 'on' : '') + '">' + (activeTrip ? '● GPS tracking' : '○ GPS waiting') + '</span></div>' +
+      (state.driver.error ? '<div class="hint error-hint">' + e(state.driver.error) + '</div>' : '') +
+      (state.driver.position ? '<div class="gps-readout"><span>Latitude ' + e(state.driver.position.latitude.toFixed(5)) + '</span><span>Longitude ' + e(state.driver.position.longitude.toFixed(5)) + '</span><span>' + e(state.driver.position.speed == null ? 'Speed —' : 'Speed ' + state.driver.position.speed.toFixed(1) + ' km/h') + '</span></div>' : '') +
+      '<div class="driver-trip-list">' + trips.map((trip, index) => { const rec = state.driver.tripTimes[trip.key] || {}; const isCurrent = index === state.driver.currentTripIndex; const status = rec.arrivedAt ? 'Completed · ' + new Date(rec.arrivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : rec.startedAt ? 'In progress' : isCurrent ? 'Next trip' : 'Waiting'; return '<article class="driver-trip ' + (isCurrent ? 'current' : '') + '"><div><span class="trip-number">' + (index + 1) + '</span><strong>' + e(trip.label) + '</strong><small>' + e(status) + '</small></div>' + (isCurrent && !rec.startedAt ? '<button class="button primary" data-driver-action="start-trip">Start trip</button>' : isCurrent && !rec.arrivedAt ? '<button class="button primary" data-driver-action="finish-trip">Arrived</button>' : '') + '</article>'; }).join('') + '</div>' +
+      (finished ? '<div class="driver-complete"><h3>All assigned trips completed</h3><p>Enter the closing odometer when the bus is parked.</p><form id="driverCloseForm" class="driver-form"><label>Closing odometer (km)<input name="closing_odometer" type="number" min="' + e(state.driver.openingOdometer || 0) + '" step="0.1" required></label><button class="button primary driver-cta" type="submit">Close duty</button></form></div>' : '') + '</section>';
+    return header('Driver app', 'A simple phone-first duty screen for starting the bus, recording trips, and tracking GPS.') + body;
+  }
+
   function options(items, label) {
     return items.map(item => '<option value="' + e(item.id) + '">' + e(label(item)) + '</option>').join('');
   }
@@ -236,18 +327,21 @@
         '<div class="field"><label>Service date *<input id="serviceDate" name="service_date" type="date" value="' + e(state.serviceDate) + '" required></label></div>' +
         '<div class="field"><label>Route<select name="route_id">' + routes + '</select></label></div>' +
         '<div class="field"><label>Bus parking location *<select id="parkingLocation" name="parking_location"><option value="inside_campus">Inside campus</option><option value="outside_campus">Outside campus</option></select></label></div>' +
+        '<div class="field"><label>Shift pattern<select id="logShiftMode" disabled><option value="two_shifts">Two shifts · morning + afternoon</option><option value="morning_only">Single shift · morning pickup</option><option value="afternoon_only">Single shift · afternoon drop</option></select></label></div>' +
         '<div class="field"><label>Opening odometer *<input id="openingOdo" name="opening_odometer_km" type="number" min="0" step="0.1" required></label></div>' +
         '<div class="field"><label>Closing odometer *<input name="closing_odometer_km" type="number" min="0" step="0.1" required></label></div>' +
         '<div class="field"><label>Driver<select id="logDriver" name="driver_employee_id">' + staff + '</select></label></div>' +
         '<div class="field"><label>Attendant<select name="attendant_employee_id">' + staff + '</select></label></div>' +
-        '<div class="field full"><label class="live-section-label">Morning — students to school</label></div>' +
-        '<div class="field"><label id="firstRunLabel">Out time · School run 1 *<input name="school_run_1_time" type="time" required></label></div>' +
-        '<div class="field"><label>In time · School run 2 *<input name="school_run_2_in" type="time" required></label></div>' +
-        '<div class="field full"><label class="live-section-label">Afternoon — students home</label></div>' +
-        '<div class="field"><label>Out time · Home run 1 *<input name="home_run_1_out" type="time" required></label></div>' +
-        '<div class="field"><label>In time · Home run 1 *<input name="home_run_1_in" type="time" required></label></div>' +
-        '<div class="field"><label>Out time · Home run 2 *<input name="home_run_2_out" type="time" required></label></div>' +
-        '<div class="field"><label>In time · Home run 2 *<input name="home_run_2_in" type="time" required></label></div>' +
+        '<div id="morningShiftFields" class="form-grid full-width"><div class="field full"><label class="live-section-label">Morning — students to school</label></div>' +
+        '<div class="field" id="firstRunOutField"><label id="firstRunOutLabel">Out time · School run 1 (pickup) *<input name="school_run_1_out" type="time"></label></div>' +
+        '<div class="field"><label>In time · School run 1 (students arriving) *<input name="school_run_1_in" type="time" required></label></div>' +
+        '<div class="field"><label>Out time · School run 2 (pickup) *<input name="school_run_2_out" type="time" required></label></div>' +
+        '<div class="field"><label>In time · School run 2 (students arriving) *<input name="school_run_2_in" type="time" required></label></div></div>' +
+        '<div id="afternoonShiftFields" class="form-grid full-width"><div class="field full"><label class="live-section-label">Afternoon — students home</label></div>' +
+        '<div class="field"><label>Out time · Student drop 1 *<input name="home_run_1_out" type="time" required></label></div>' +
+        '<div class="field"><label>In time · After drop 1 *<input name="home_run_1_in" type="time" required></label></div>' +
+        '<div class="field"><label>Out time · Student drop 2 *<input name="home_run_2_out" type="time" required></label></div>' +
+        '<div class="field"><label>In time · After drop 2 *<input name="home_run_2_in" type="time" required></label></div></div>' +
         '<div class="field full"><label>Remarks<textarea name="remarks" placeholder="Optional operational notes"></textarea></label></div></div>' +
         '<div class="form-actions"><button class="button primary" type="submit">Save daily log</button></div></form></section>';
     }
@@ -266,9 +360,9 @@
     const schoolOne = find('to_school', 1), schoolTwo = find('to_school', 2);
     const homeOne = find('to_home', 1), homeTwo = find('to_home', 2);
     const firstIn = log.parking_location_at_start === 'outside_campus';
-    return (firstIn ? 'In ' + (schoolOne?.arrived_at || '—') : 'Out ' + (schoolOne?.departed_at || '—')) +
-      ' · In ' + (schoolTwo?.arrived_at || '—') + ' · Home ' + (homeOne?.departed_at || '—') + '–' +
-      (homeOne?.arrived_at || '—') + ' / ' + (homeTwo?.departed_at || '—') + '–' + (homeTwo?.arrived_at || '—');
+    const run = item => (item?.departed_at || '—') + '–' + (item?.arrived_at || '—');
+    return (firstIn ? 'Pickup 1 ' : 'Pickup 1 ') + run(schoolOne) + ' · Pickup 2 ' + run(schoolTwo) +
+      ' · Drop 1 ' + run(homeOne) + ' · Drop 2 ' + run(homeTwo);
   }
   function setDailyDefaults() {
     const form = document.querySelector('#dailyLogForm');
@@ -278,12 +372,30 @@
   function updateParking(form) {
     if (!form) return;
     const inside = form.elements.parking_location.value === 'inside_campus';
-    const label = document.querySelector('#firstRunLabel');
+    const firstOutField = document.querySelector('#firstRunOutField');
+    const firstOut = form.elements.school_run_1_out;
     const hint = document.querySelector('#parkingHint');
-    if (label) label.firstChild.textContent = inside ? 'Out time · School run 1 *' : 'In time · School run 1 *';
+    if (firstOutField) firstOutField.hidden = !inside;
+    if (firstOut) { firstOut.required = inside; firstOut.disabled = !inside; if (!inside) firstOut.value = ''; }
     if (hint) hint.innerHTML = inside
-      ? '<b>Inside campus:</b> record the first school run’s out time, when the bus leaves campus for student pickup.'
-      : '<b>Outside campus:</b> record the first school run’s in time, when the bus arrives at school with students.';
+      ? '<b>Inside campus:</b> Trip 1 leaves school for pickup, then returns with students. Trip 2 repeats the same out/in pattern.'
+      : '<b>Outside campus:</b> Trip 1 starts with the incoming time when the bus arrives at school with students. Trip 2 records out and in.';
+  }
+  function updateShiftFields(form) {
+    if (!form) return;
+    const selected = bus(form.elements.bus_id.value);
+    const mode = selected?.shift_mode || 'two_shifts';
+    const morning = mode !== 'afternoon_only';
+    const afternoon = mode !== 'morning_only';
+    const shiftSelect = form.elements.logShiftMode;
+    if (shiftSelect) shiftSelect.value = mode;
+    const morningFields = form.querySelector('#morningShiftFields');
+    const afternoonFields = form.querySelector('#afternoonShiftFields');
+    if (morningFields) morningFields.hidden = !morning;
+    if (afternoonFields) afternoonFields.hidden = !afternoon;
+    ['school_run_1_in', 'school_run_2_out', 'school_run_2_in'].forEach(name => { if (form.elements[name]) form.elements[name].required = morning; });
+    ['home_run_1_out', 'home_run_1_in', 'home_run_2_out', 'home_run_2_in'].forEach(name => { if (form.elements[name]) form.elements[name].required = afternoon; });
+    updateParking(form);
   }
   function syncDailyBus(form) {
     const selected = bus(form.elements.bus_id.value);
@@ -291,12 +403,12 @@
     form.elements.opening_odometer_km.value = selected.current_odometer_km == null ? '' : selected.current_odometer_km;
     form.elements.parking_location.value = selected.parking_location || 'inside_campus';
     if (selected.default_driver_employee_id) form.elements.driver_employee_id.value = selected.default_driver_employee_id;
-    updateParking(form);
+    updateShiftFields(form);
   }
 
   async function loadFleet(revision) {
     const result = await state.client.from('buses')
-      .select('id, organization_id, branch_id, registration_number, bus_code, make_model, seating_capacity, current_odometer_km, fuel_tank_capacity_l, parking_location, status, default_driver_employee_id, active')
+      .select('id, organization_id, branch_id, registration_number, bus_code, make_model, seating_capacity, current_odometer_km, fuel_tank_capacity_l, parking_location, shift_mode, status, default_driver_employee_id, active')
       .eq('organization_id', state.membership.organization_id).eq('branch_id', state.activeBranchId).order('bus_code');
     if (stale(revision)) return;
     if (result.error) throw result.error;
@@ -331,6 +443,13 @@
     runs.forEach(run => groups.set(run.log_id, [...(groups.get(run.log_id) || []), run]));
     state.logs = (logsResult.data || []).map(log => ({ ...log, runs: groups.get(log.id) || [] }));
   }
+  async function loadAccessDirectory(revision) {
+    if (!can('*')) return;
+    const result = await state.client.rpc('get_access_directory');
+    if (stale(revision)) return;
+    if (result.error) throw result.error;
+    state.accessDirectory = result.data || [];
+  }
   async function refresh() {
     const view = state.view, revision = ++state.revision;
     shell();
@@ -340,8 +459,10 @@
       if (view === 'daily-log') {
         await Promise.all([loadFleet(revision), loadDailySupport(revision)]);
         if (!stale(revision)) await loadLogs(revision);
-      } else if (view === 'fleet' || view === 'dashboard') {
+      } else if (view === 'fleet' || view === 'dashboard' || view === 'driver-app') {
         await loadFleet(revision);
+      } else if (view === 'access') {
+        await loadAccessDirectory(revision);
       }
       if (!stale(revision)) shell();
     } catch (error) {
@@ -421,6 +542,7 @@
       '<div class="field"><label>Current odometer *<input name="current_odometer_km" type="number" min="0" step="0.1" required></label></div>' +
       '<div class="field"><label>Fuel tank capacity (L)<input name="fuel_tank_capacity_l" type="number" min="1" step="0.1"></label></div>' +
       '<div class="field"><label>Parking location *<select name="parking_location"><option value="inside_campus">Inside campus</option><option value="outside_campus">Outside campus</option></select></label></div>' +
+      '<div class="field"><label>Shift pattern *<select name="shift_mode"><option value="two_shifts">Two shifts · morning + afternoon</option><option value="morning_only">Single shift · morning pickup</option><option value="afternoon_only">Single shift · afternoon drop</option></select></label></div>' +
       '<div class="field"><label>Status *<select name="status"><option value="available">Available</option><option value="on_route">On route</option><option value="in_service">In service</option><option value="inactive">Inactive</option><option value="breakdown">Breakdown</option></select></label></div></div>' +
       '<div class="form-actions"><button type="button" class="button secondary" data-modal-action="close">Cancel</button><button class="button primary" type="submit">Save bus</button></div></form>';
     modal.showModal();
@@ -440,16 +562,18 @@
     if (!payload.name) { notify('Enter a branch name.', 'error'); return; }
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true; button.textContent = 'Saving…';
-    const result = await state.client.from('branches').insert(payload).select('id, name, code, address, active').single();
+    // Do not request the inserted row here. The new branch is not yet visible
+    // to the branch-scoped SELECT policy during PostgREST's RETURNING step.
+    // Refresh immediately after the insert to load it through the normal read
+    // policy and select it for the user.
+    const result = await state.client.from('branches').insert(payload);
     if (result.error) {
       button.disabled = false; button.textContent = 'Save branch';
       notify(errorText(result.error, 'Could not save the branch.'), 'error');
       return;
     }
-    state.branches = [...state.branches, result.data].sort((a, b) => a.name.localeCompare(b.name));
-    state.activeBranchId = result.data.id;
     modal.close();
-    notify('Branch added. It is now selected.');
+    notify('Branch added. Refreshing the branch list.');
     await refresh();
   }
   async function addBus(form) {
@@ -462,7 +586,7 @@
       seating_capacity: text(data.get('seating_capacity')) ? num(data.get('seating_capacity')) : null,
       current_odometer_km: num(data.get('current_odometer_km')),
       fuel_tank_capacity_l: text(data.get('fuel_tank_capacity_l')) ? num(data.get('fuel_tank_capacity_l')) : null,
-      parking_location: data.get('parking_location'), status: data.get('status'),
+      parking_location: data.get('parking_location'), shift_mode: data.get('shift_mode'), status: data.get('status'),
     };
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true; button.textContent = 'Saving…';
@@ -484,9 +608,17 @@
       notify('Enter a closing odometer that is at least the opening odometer.', 'error');
       return;
     }
-    const first = text(data.get('school_run_1_time'));
-    const required = ['bus_id', 'service_date', 'school_run_2_in', 'home_run_1_out', 'home_run_1_in', 'home_run_2_out', 'home_run_2_in'];
-    if (!first || required.some(key => !text(data.get(key)))) {
+    const firstOut = text(data.get('school_run_1_out'));
+    const firstIn = text(data.get('school_run_1_in'));
+    const secondOut = text(data.get('school_run_2_out'));
+    const secondIn = text(data.get('school_run_2_in'));
+    const mode = bus(text(data.get('bus_id')))?.shift_mode || 'two_shifts';
+    const morning = mode !== 'afternoon_only';
+    const afternoon = mode !== 'morning_only';
+    const required = ['bus_id', 'service_date'];
+    if (morning) required.push('school_run_1_in', 'school_run_2_out', 'school_run_2_in');
+    if (afternoon) required.push('home_run_1_out', 'home_run_1_in', 'home_run_2_out', 'home_run_2_in');
+    if ((morning && parking === 'inside_campus' && !firstOut) || (morning && !firstIn) || (morning && !secondOut) || required.some(key => !text(data.get(key)))) {
       notify('Complete every required time and bus detail.', 'error');
       return;
     }
@@ -495,16 +627,15 @@
       p_route_id: text(data.get('route_id')), p_driver_employee_id: text(data.get('driver_employee_id')),
       p_attendant_employee_id: text(data.get('attendant_employee_id')), p_parking_location: parking,
       p_opening_odometer_km: opening, p_closing_odometer_km: closing,
-      p_school_run_1_departed_at: parking === 'inside_campus' ? first : null,
-      p_school_run_1_arrived_at: parking === 'outside_campus' ? first : null,
-      p_school_run_2_arrived_at: text(data.get('school_run_2_in')),
+      p_school_run_1_departed_at: firstOut, p_school_run_1_arrived_at: firstIn,
+      p_school_run_2_departed_at: secondOut, p_school_run_2_arrived_at: secondIn,
       p_home_run_1_departed_at: text(data.get('home_run_1_out')), p_home_run_1_arrived_at: text(data.get('home_run_1_in')),
       p_home_run_2_departed_at: text(data.get('home_run_2_out')), p_home_run_2_arrived_at: text(data.get('home_run_2_in')),
       p_remarks: text(data.get('remarks')),
     };
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true; button.textContent = 'Saving…';
-    const result = await state.client.rpc('submit_daily_log', payload);
+    const result = await state.client.rpc('submit_daily_log_v2', payload);
     if (result.error) {
       button.disabled = false; button.textContent = 'Save daily log';
       notify(errorText(result.error, 'The daily log was not saved.'), 'error');
@@ -515,9 +646,91 @@
     await refresh();
   }
 
+  function startDriverDuty(form) {
+    const selectedBus = bus(form.elements.bus_id.value);
+    const opening = num(form.elements.opening_odometer.value);
+    if (!selectedBus || opening == null || opening < Number(selectedBus.current_odometer_km || 0)) {
+      notify('Enter the current starting odometer for the selected bus.', 'error');
+      return;
+    }
+    state.driver.busId = selectedBus.id;
+    state.driver.openingOdometer = opening;
+    state.driver.sessionStartedAt = new Date().toISOString();
+    state.driver.currentTripIndex = 0;
+    state.driver.tripTimes = {};
+    state.driver.position = null;
+    state.driver.error = '';
+    driverStore();
+    notify('Duty started. Start the first trip when the bus leaves.');
+    renderView();
+  }
+  function startDriverTrip() {
+    const selectedBus = bus(state.driver.busId);
+    const trip = driverTrips(selectedBus)[state.driver.currentTripIndex];
+    if (!trip) return;
+    state.driver.tripTimes[trip.key] = { startedAt: new Date().toISOString() };
+    driverStartGps();
+    driverStore();
+    notify('Trip started. GPS tracking is active.');
+    renderView();
+  }
+  function finishDriverTrip() {
+    const selectedBus = bus(state.driver.busId);
+    const trip = driverTrips(selectedBus)[state.driver.currentTripIndex];
+    if (!trip) return;
+    state.driver.tripTimes[trip.key] = { ...(state.driver.tripTimes[trip.key] || {}), arrivedAt: new Date().toISOString() };
+    driverStopGps();
+    state.driver.currentTripIndex += 1;
+    driverStore();
+    notify('Arrival recorded.');
+    renderView();
+  }
+  function closeDriverDuty(form) {
+    const closing = num(form.elements.closing_odometer.value);
+    if (closing == null || closing < Number(state.driver.openingOdometer || 0)) {
+      notify('Closing odometer cannot be below the opening reading.', 'error');
+      return;
+    }
+    driverStopGps();
+    state.driver = { busId: '', sessionStartedAt: null, openingOdometer: null, currentTripIndex: 0, tripTimes: {}, position: null, watchId: null, error: '' };
+    try { localStorage.removeItem('campusHubDriverSession'); } catch (_) { /* ignore storage cleanup errors */ }
+    notify('Duty closed and timings saved on this device.');
+    renderView();
+  }
+
+  async function assignEmployeeAccess(form) {
+    if (!can('*')) return;
+    const data = new FormData(form);
+    const role = text(data.get('role'));
+    const payload = {
+      p_email: text(data.get('email')),
+      p_full_name: text(data.get('full_name')),
+      p_employee_code: text(data.get('employee_code')),
+      p_role: role,
+      p_branch_id: role === 'group_admin' ? null : text(data.get('branch_id')),
+    };
+    if (!payload.p_email || !payload.p_full_name || (role !== 'group_admin' && !payload.p_branch_id)) {
+      notify('Enter the email, name, role, and branch scope.', 'error');
+      return;
+    }
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true; button.textContent = 'Saving…';
+    const result = await state.client.rpc('assign_employee_access', payload);
+    if (result.error) {
+      button.disabled = false; button.textContent = 'Save access';
+      notify(errorText(result.error, 'Could not save employee access.'), 'error');
+      return;
+    }
+    notify('Employee, role, and branch access saved together.');
+    await refresh();
+  }
+
   root.addEventListener('click', event => {
     const view = event.target.closest('[data-live-view]');
     if (view) { state.view = view.dataset.liveView; refresh(); return; }
+    const driverAction = event.target.closest('[data-driver-action]')?.dataset.driverAction;
+    if (driverAction === 'start-trip') { startDriverTrip(); return; }
+    if (driverAction === 'finish-trip') { finishDriverTrip(); return; }
     const action = event.target.closest('[data-live-action]')?.dataset.liveAction;
     if (!action) return;
     if (action === 'sign-out') signOut();
@@ -529,18 +742,27 @@
   root.addEventListener('change', event => {
     if (event.target.id === 'branchSelector') { state.activeBranchId = event.target.value; refresh(); }
     if (event.target.id === 'logBus') syncDailyBus(event.target.closest('form'));
+    if (event.target.id === 'driverBus') { state.driver.busId = event.target.value; renderView(); }
     if (event.target.id === 'parkingLocation') updateParking(event.target.closest('form'));
     if (event.target.id === 'serviceDate') { state.serviceDate = event.target.value || state.serviceDate; refresh(); }
+    if (event.target.id === 'accessRole') syncAccessRole(event.target.closest('form'));
   });
   root.addEventListener('submit', event => {
     if (event.target.id === 'signInForm') { event.preventDefault(); signIn(event.target); }
     if (event.target.id === 'dailyLogForm') { event.preventDefault(); saveDailyLog(event.target); }
+    if (event.target.id === 'driverStartForm') { event.preventDefault(); startDriverDuty(event.target); }
+    if (event.target.id === 'driverCloseForm') { event.preventDefault(); closeDriverDuty(event.target); }
+    if (event.target.id === 'accessForm') { event.preventDefault(); assignEmployeeAccess(event.target); }
   });
   modal.addEventListener('click', event => { if (event.target.closest('[data-modal-action="close"]')) modal.close(); });
   modal.addEventListener('submit', event => { if (event.target.id === 'addBusForm') { event.preventDefault(); addBus(event.target); } });
   modal.addEventListener('submit', event => { if (event.target.id === 'addBranchForm') { event.preventDefault(); addBranch(event.target); } });
 
   async function init() {
+    try {
+      const savedDriver = JSON.parse(localStorage.getItem('campusHubDriverSession') || 'null');
+      if (savedDriver?.sessionStartedAt) state.driver = { ...state.driver, ...savedDriver, watchId: null };
+    } catch (_) { /* continue with a fresh driver session */ }
     if (!configured()) {
       statePage('Live connection not added yet', 'The protected database and live sign-in will be connected after the setup checks are complete.', '⌁');
       return;
@@ -552,7 +774,7 @@
         else {
           state.revision += 1;
           state.session = null; state.profile = null; state.membership = null; state.organization = null;
-          state.scopes = []; state.branches = []; state.buses = []; state.routes = []; state.employees = []; state.logs = [];
+          state.scopes = []; state.branches = []; state.buses = []; state.routes = []; state.employees = []; state.logs = []; state.accessDirectory = [];
           loginPage();
         }
       }, 0);
