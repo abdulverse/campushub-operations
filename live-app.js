@@ -10,7 +10,7 @@
     client: null, session: null, profile: null, membership: null, organization: null,
     scopes: [], branches: [], activeBranchId: '', buses: [], routes: [], employees: [],
     logs: [], accessDirectory: [], serviceDate: today(), view: 'dashboard', revision: 0,
-    driver: { busId: '', sessionStartedAt: null, openingOdometer: null, currentTripIndex: 0, tripTimes: {}, position: null, watchId: null, error: '' },
+    driver: { busId: '', sessionStartedAt: null, openingOdometer: null, currentTripIndex: 0, tripTimes: {}, position: null, watchId: null, error: '', dutyPurpose: 'student_transport' },
   };
   const roleCapabilities = {
     group_admin: ['*'],
@@ -18,6 +18,18 @@
     transport_manager: ['fleet.read', 'fleet.write', 'route.read', 'route.write', 'daily_log.read', 'daily_log.write', 'employee.read'],
     driver_attendant: ['fleet.read', 'daily_log.read'],
   };
+  const dutyPurposeLabels = {
+    student_transport: 'Student transport · regular trips',
+    teacher_pickup: 'Teacher pickup',
+    holiday_job: 'Holiday job',
+    student_tour: 'Students tour',
+    outing: 'Outing',
+    fuel_filling: 'Fuel filling',
+    repair_service: 'Repair / service',
+    other_designated_job: 'Other designated job',
+  };
+  function dutyPurposeLabel(value) { return dutyPurposeLabels[value] || dutyPurposeLabels.other_designated_job; }
+  function dutyPurposeOptions(selected) { return Object.entries(dutyPurposeLabels).map(([value, label]) => '<option value="' + e(value) + '"' + (value === selected ? ' selected' : '') + '>' + e(label) + '</option>').join(''); }
 
   function today() {
     const now = new Date();
@@ -245,6 +257,9 @@
   }
 
   function driverTrips(busRecord) {
+    if (state.driver.dutyPurpose && state.driver.dutyPurpose !== 'student_transport') {
+      return [{ key: 'special-duty', label: dutyPurposeLabel(state.driver.dutyPurpose), kind: 'special', number: 1 }];
+    }
     const mode = busRecord?.shift_mode || 'two_shifts';
     const parking = busRecord?.parking_location || 'inside_campus';
     const trips = [];
@@ -294,8 +309,8 @@
     const busOptions = options(state.buses, item => item.bus_code + ' · ' + item.registration_number);
     let body = '';
     if (!state.buses.length) body = '<section class="card live-empty"><span class="live-state-icon">◉</span><h2>No bus assigned yet</h2><p>A manager must assign a bus to this driver before duty can start.</p></section>';
-    else if (!started) body = '<section class="card driver-start-card"><div class="driver-badge">DRIVER MODE</div><h2>Start today’s duty</h2><p>Open the bus, enter the starting odometer, and the trip buttons will appear in the correct order.</p><form id="driverStartForm" class="driver-form"><label>Bus<select name="bus_id" id="driverBus">' + busOptions + '</select></label><div class="driver-bus-facts"><span>Shift pattern<strong id="driverShiftText">' + e(modeText) + '</strong></span><span>Parking<strong>' + e(busRecord?.parking_location === 'outside_campus' ? 'Outside campus' : 'Inside campus') + '</strong></span></div><label>Starting odometer (km)<input name="opening_odometer" type="number" min="0" step="0.1" required value="' + e(busRecord?.current_odometer_km ?? '') + '"></label><button class="button primary driver-cta" type="submit">Start duty</button></form></section>';
-    else body = '<section class="card driver-live-card"><div class="driver-live-head"><div><div class="driver-badge">DUTY ACTIVE</div><h2>' + e(busRecord?.bus_code || 'Assigned bus') + '</h2><p>Opening odometer: <b>' + e(state.driver.openingOdometer) + ' km</b> · ' + e(modeText) + '</p></div><span class="gps-pill ' + (activeTrip ? 'on' : '') + '">' + (activeTrip ? '● GPS tracking' : '○ GPS waiting') + '</span></div>' +
+    else if (!started) body = '<section class="card driver-start-card"><div class="driver-badge">DRIVER MODE</div><h2>Start today’s duty</h2><p>Open the bus, choose the purpose, enter the starting odometer, and start GPS when the bus moves.</p><form id="driverStartForm" class="driver-form"><label>Bus<select name="bus_id" id="driverBus">' + busOptions + '</select></label><label>Duty purpose<select name="duty_purpose" id="driverDutyPurpose">' + dutyPurposeOptions(state.driver.dutyPurpose || 'student_transport') + '</select></label><div class="driver-bus-facts"><span>Shift pattern<strong id="driverShiftText">' + e(modeText) + '</strong></span><span>Parking<strong>' + e(busRecord?.parking_location === 'outside_campus' ? 'Outside campus' : 'Inside campus') + '</strong></span></div><label>Starting odometer (km)<input name="opening_odometer" type="number" min="0" step="0.1" required value="' + e(busRecord?.current_odometer_km ?? '') + '"></label><button class="button primary driver-cta" type="submit">Start duty</button></form></section>';
+    else body = '<section class="card driver-live-card"><div class="driver-live-head"><div><div class="driver-badge">DUTY ACTIVE</div><h2>' + e(busRecord?.bus_code || 'Assigned bus') + '</h2><p>Purpose: <b>' + e(dutyPurposeLabel(state.driver.dutyPurpose)) + '</b><br>Opening odometer: <b>' + e(state.driver.openingOdometer) + ' km</b> · ' + e(modeText) + '</p></div><span class="gps-pill ' + (activeTrip ? 'on' : '') + '">' + (activeTrip ? '● GPS tracking' : '○ GPS waiting') + '</span></div>' +
       (state.driver.error ? '<div class="hint error-hint">' + e(state.driver.error) + '</div>' : '') +
       (state.driver.position ? '<div class="gps-readout"><span>Latitude ' + e(state.driver.position.latitude.toFixed(5)) + '</span><span>Longitude ' + e(state.driver.position.longitude.toFixed(5)) + '</span><span>' + e(state.driver.position.speed == null ? 'Speed —' : 'Speed ' + state.driver.position.speed.toFixed(1) + ' km/h') + '</span></div>' : '') +
       '<div class="driver-trip-list">' + trips.map((trip, index) => { const rec = state.driver.tripTimes[trip.key] || {}; const isCurrent = index === state.driver.currentTripIndex; const status = rec.arrivedAt ? 'Completed · ' + new Date(rec.arrivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : rec.startedAt ? 'In progress' : isCurrent ? 'Next trip' : 'Waiting'; return '<article class="driver-trip ' + (isCurrent ? 'current' : '') + '"><div><span class="trip-number">' + (index + 1) + '</span><strong>' + e(trip.label) + '</strong><small>' + e(status) + '</small></div>' + (isCurrent && !rec.startedAt ? '<button class="button primary" data-driver-action="start-trip">Start trip</button>' : isCurrent && !rec.arrivedAt ? '<button class="button primary" data-driver-action="finish-trip">Arrived</button>' : '') + '</article>'; }).join('') + '</div>' +
@@ -310,10 +325,10 @@
     const canWrite = can('daily_log.write');
     const logs = state.logs.length ? state.logs.map(log =>
       '<tr><td><b class="strong">' + e(bus(log.bus_id)?.bus_code || 'Bus') + '</b></td>' +
-      '<td>' + e(log.parking_location_at_start === 'outside_campus' ? 'Outside campus' : 'Inside campus') + '</td>' +
+      '<td>' + e(dutyPurposeLabel(log.duty_purpose || 'student_transport')) + '</td><td>' + e(log.parking_location_at_start === 'outside_campus' ? 'Outside campus' : 'Inside campus') + '</td>' +
       '<td>' + fmtKm(log.opening_odometer_km) + '</td><td>' + fmtKm(log.closing_odometer_km) + '</td><td>' + fmtKm(log.total_km) + '</td>' +
       '<td>' + e(runText(log)) + '</td><td><span class="status">' + e(log.status) + '</span></td></tr>'
-    ).join('') : '<tr><td colspan="7" class="live-table-empty">No daily logs for ' + e(state.serviceDate) + ' in this branch.</td></tr>';
+    ).join('') : '<tr><td colspan="8" class="live-table-empty">No daily logs for ' + e(state.serviceDate) + ' in this branch.</td></tr>';
     let form = '<section class="card live-empty"><h2>View-only access</h2><p>Your role can read daily logs but cannot submit them.</p></section>';
     if (canWrite && !state.buses.length) form = '<section class="card live-empty"><h2>Add a bus first</h2><p>A daily log can be created once this branch has a live vehicle record.</p></section>';
     if (canWrite && state.buses.length) {
@@ -327,6 +342,7 @@
         '<div class="field"><label>Service date *<input id="serviceDate" name="service_date" type="date" value="' + e(state.serviceDate) + '" required></label></div>' +
         '<div class="field"><label>Route<select name="route_id">' + routes + '</select></label></div>' +
         '<div class="field"><label>Bus parking location *<select id="parkingLocation" name="parking_location"><option value="inside_campus">Inside campus</option><option value="outside_campus">Outside campus</option></select></label></div>' +
+        '<div class="field"><label>Duty purpose *<select id="dailyDutyPurpose" name="duty_purpose">' + dutyPurposeOptions('student_transport') + '</select></label></div>' +
         '<div class="field"><label>Shift pattern<select id="logShiftMode" disabled><option value="two_shifts">Two shifts · morning + afternoon</option><option value="morning_only">Single shift · morning pickup</option><option value="afternoon_only">Single shift · afternoon drop</option></select></label></div>' +
         '<div class="field"><label>Opening odometer *<input id="openingOdo" name="opening_odometer_km" type="number" min="0" step="0.1" required></label></div>' +
         '<div class="field"><label>Closing odometer *<input name="closing_odometer_km" type="number" min="0" step="0.1" required></label></div>' +
@@ -351,11 +367,12 @@
       '<div class="calc-list"><div><span>Scheduled student runs</span><strong>4 runs</strong></div><div><span>Selected branch</span><strong>' +
       e(branchName(state.activeBranchId)) + '</strong></div></div></aside></div>' +
       '<section class="card section-card"><div class="section-head"><div><h2>Logs for ' + e(state.serviceDate) + '</h2><p>Distance is calculated by the database from protected odometer readings.</p></div></div>' +
-      '<div class="table-wrap"><table><thead><tr><th>BUS</th><th>PARKING</th><th>OPENING</th><th>CLOSING</th><th>DISTANCE</th><th>RUNS</th><th>STATUS</th></tr></thead><tbody>' +
+      '<div class="table-wrap"><table><thead><tr><th>BUS</th><th>DUTY PURPOSE</th><th>PARKING</th><th>OPENING</th><th>CLOSING</th><th>DISTANCE</th><th>RUNS</th><th>STATUS</th></tr></thead><tbody>' +
       logs + '</tbody></table></div></section>';
   }
 
   function runText(log) {
+    if (log.duty_purpose && log.duty_purpose !== 'student_transport') return dutyPurposeLabel(log.duty_purpose);
     const find = (kind, number) => (log.runs || []).find(run => run.run_kind === kind && run.run_number === number);
     const schoolOne = find('to_school', 1), schoolTwo = find('to_school', 2);
     const homeOne = find('to_home', 1), homeTwo = find('to_home', 2);
@@ -396,6 +413,29 @@
     ['school_run_1_in', 'school_run_2_out', 'school_run_2_in'].forEach(name => { if (form.elements[name]) form.elements[name].required = morning; });
     ['home_run_1_out', 'home_run_1_in', 'home_run_2_out', 'home_run_2_in'].forEach(name => { if (form.elements[name]) form.elements[name].required = afternoon; });
     updateParking(form);
+    updateDutyPurpose(form);
+  }
+  function updateDutyPurpose(form) {
+    if (!form) return;
+    const special = form.elements.duty_purpose?.value && form.elements.duty_purpose.value !== 'student_transport';
+    const morningFields = form.querySelector('#morningShiftFields');
+    const afternoonFields = form.querySelector('#afternoonShiftFields');
+    if (special) {
+      if (morningFields) morningFields.hidden = true;
+      if (afternoonFields) afternoonFields.hidden = true;
+      ['school_run_1_out', 'school_run_1_in', 'school_run_2_out', 'school_run_2_in', 'home_run_1_out', 'home_run_1_in', 'home_run_2_out', 'home_run_2_in'].forEach(name => {
+        if (form.elements[name]) { form.elements[name].required = false; form.elements[name].disabled = true; form.elements[name].value = ''; }
+      });
+      const hint = document.querySelector('#parkingHint');
+      if (hint) hint.innerHTML = '<b>Special duty:</b> this log records the bus purpose and odometer movement without student pickup/drop timings.';
+      const button = form.querySelector('button[type="submit"]');
+      if (button) button.textContent = 'Save special duty log';
+    } else {
+      ['school_run_1_out', 'school_run_1_in', 'school_run_2_out', 'school_run_2_in', 'home_run_1_out', 'home_run_1_in', 'home_run_2_out', 'home_run_2_in'].forEach(name => { if (form.elements[name]) form.elements[name].disabled = false; });
+      const button = form.querySelector('button[type="submit"]');
+      if (button) button.textContent = 'Save daily log';
+      updateParking(form);
+    }
   }
   function syncDailyBus(form) {
     const selected = bus(form.elements.bus_id.value);
@@ -403,6 +443,7 @@
     form.elements.opening_odometer_km.value = selected.current_odometer_km == null ? '' : selected.current_odometer_km;
     form.elements.parking_location.value = selected.parking_location || 'inside_campus';
     if (selected.default_driver_employee_id) form.elements.driver_employee_id.value = selected.default_driver_employee_id;
+    if (form.elements.duty_purpose) form.elements.duty_purpose.value = 'student_transport';
     updateShiftFields(form);
   }
 
@@ -427,7 +468,7 @@
   }
   async function loadLogs(revision) {
     const logsResult = await state.client.from('daily_bus_logs')
-      .select('id, bus_id, service_date, parking_location_at_start, opening_odometer_km, closing_odometer_km, total_km, status, remarks, created_at')
+      .select('id, bus_id, service_date, parking_location_at_start, duty_purpose, opening_odometer_km, closing_odometer_km, total_km, status, remarks, created_at')
       .eq('organization_id', state.membership.organization_id).eq('branch_id', state.activeBranchId).eq('service_date', state.serviceDate).order('created_at', { ascending: false });
     if (stale(revision)) return;
     if (logsResult.error) throw logsResult.error;
@@ -603,9 +644,28 @@
   async function saveDailyLog(form) {
     const data = new FormData(form);
     const parking = String(data.get('parking_location'));
+    const dutyPurpose = text(data.get('duty_purpose')) || 'student_transport';
     const opening = num(data.get('opening_odometer_km')), closing = num(data.get('closing_odometer_km'));
     if (opening == null || closing == null || closing < opening) {
       notify('Enter a closing odometer that is at least the opening odometer.', 'error');
+      return;
+    }
+    if (dutyPurpose !== 'student_transport') {
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true; button.textContent = 'Saving…';
+      const special = await state.client.rpc('submit_special_duty_log', {
+        p_bus_id: text(data.get('bus_id')), p_service_date: text(data.get('service_date')),
+        p_parking_location: parking, p_opening_odometer_km: opening, p_closing_odometer_km: closing,
+        p_duty_purpose: dutyPurpose, p_remarks: text(data.get('remarks')),
+      });
+      if (special.error) {
+        button.disabled = false; button.textContent = 'Save special duty log';
+        notify(errorText(special.error, 'The special duty log was not saved.'), 'error');
+        return;
+      }
+      state.serviceDate = text(data.get('service_date')) || state.serviceDate;
+      notify('Special duty log saved with its purpose and odometer readings.');
+      await refresh();
       return;
     }
     const firstOut = text(data.get('school_run_1_out'));
@@ -654,6 +714,7 @@
       return;
     }
     state.driver.busId = selectedBus.id;
+    state.driver.dutyPurpose = text(form.elements.duty_purpose?.value) || 'student_transport';
     state.driver.openingOdometer = opening;
     state.driver.sessionStartedAt = new Date().toISOString();
     state.driver.currentTripIndex = 0;
@@ -692,7 +753,7 @@
       return;
     }
     driverStopGps();
-    state.driver = { busId: '', sessionStartedAt: null, openingOdometer: null, currentTripIndex: 0, tripTimes: {}, position: null, watchId: null, error: '' };
+    state.driver = { busId: '', sessionStartedAt: null, openingOdometer: null, currentTripIndex: 0, tripTimes: {}, position: null, watchId: null, error: '', dutyPurpose: 'student_transport' };
     try { localStorage.removeItem('campusHubDriverSession'); } catch (_) { /* ignore storage cleanup errors */ }
     notify('Duty closed and timings saved on this device.');
     renderView();
@@ -744,6 +805,7 @@
     if (event.target.id === 'logBus') syncDailyBus(event.target.closest('form'));
     if (event.target.id === 'driverBus') { state.driver.busId = event.target.value; renderView(); }
     if (event.target.id === 'parkingLocation') updateParking(event.target.closest('form'));
+    if (event.target.id === 'dailyDutyPurpose') updateDutyPurpose(event.target.closest('form'));
     if (event.target.id === 'serviceDate') { state.serviceDate = event.target.value || state.serviceDate; refresh(); }
     if (event.target.id === 'accessRole') syncAccessRole(event.target.closest('form'));
   });
