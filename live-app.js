@@ -115,6 +115,7 @@
       '<nav class="nav"><p class="nav-label">LIVE TRANSPORT</p>' +
       '<button class="nav-item ' + (state.view === 'fleet' ? 'active' : '') + '" data-live-view="fleet"><span>▱</span><b>Fleet</b></button>' +
       '<button class="nav-item ' + (state.view === 'daily-log' ? 'active' : '') + '" data-live-view="daily-log"><span>▤</span><b>Daily log</b></button>' +
+      (can('*') ? '<button class="nav-item ' + (state.view === 'branches' ? 'active' : '') + '" data-live-view="branches"><span>⌘</span><b>Branches</b></button>' : '') +
       '<p class="nav-label">NEXT MODULES</p><span class="nav-item nav-disabled"><span>◉</span><b>Parent grievances</b></span>' +
       '<span class="nav-item nav-disabled"><span>✓</span><b>Employee tasks</b></span>' +
       '<span class="nav-item nav-disabled"><span>⌖</span><b>Tracking & reports</b></span></nav>' +
@@ -132,8 +133,20 @@
       main.innerHTML = '<section class="card live-empty"><h2>Select a branch</h2><p>This account has no active branch in its live access scope.</p></section>';
       return;
     }
-    main.innerHTML = state.view === 'daily-log' ? dailyMarkup() : fleetMarkup();
+    main.innerHTML = state.view === 'daily-log' ? dailyMarkup() : state.view === 'branches' ? branchesMarkup() : fleetMarkup();
     if (state.view === 'daily-log') setDailyDefaults();
+  }
+
+  function branchesMarkup() {
+    const rows = state.branches.length ? state.branches.map(item =>
+      '<tr><td><b class="strong">' + e(item.name) + '</b></td><td>' + e(item.code || '—') + '</td><td>' +
+      (item.id === state.activeBranchId ? '<span class="status">Selected</span>' : '<button class="text-button" data-live-action="select-branch" data-branch-id="' + e(item.id) + '">Use branch</button>') +
+      '</td></tr>'
+    ).join('') : '<tr><td colspan="3" class="live-table-empty">No branches have been configured yet.</td></tr>';
+    const actions = can('*') ? '<button class="button primary" data-live-action="open-add-branch">＋ Add branch</button>' : '';
+    return header('Branch management', 'Create and switch between your school branches.', actions) +
+      '<section class="card section-card"><div class="section-head"><div><h2>Branches</h2><p>New branches become available to your group administrator immediately.</p></div></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>BRANCH NAME</th><th>CODE</th><th>ACTION</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>';
   }
 
   function fleetMarkup() {
@@ -366,6 +379,33 @@
       '<div class="form-actions"><button type="button" class="button secondary" data-modal-action="close">Cancel</button><button class="button primary" type="submit">Save bus</button></div></form>';
     modal.showModal();
   }
+  function openBranchModal() {
+    if (!can('*')) return;
+    modal.innerHTML = '<form id="addBranchForm" class="modal-content"><div class="modal-head"><div><h2>Add a branch</h2><p>This branch will be added to ' + e(state.organization?.name || 'your school group') + '.</p></div><button class="close-modal" type="button" data-modal-action="close">×</button></div>' +
+      '<div class="form-grid"><div class="field full"><label>Branch name *<input name="name" required placeholder="e.g. Sambalpur First Step"></label></div>' +
+      '<div class="field"><label>Branch code<input name="code" placeholder="e.g. SFS"></label></div><div class="field"><label>Address<input name="address" placeholder="Optional campus address"></label></div></div>' +
+      '<div class="form-actions"><button type="button" class="button secondary" data-modal-action="close">Cancel</button><button class="button primary" type="submit">Save branch</button></div></form>';
+    modal.showModal();
+  }
+  async function addBranch(form) {
+    if (!can('*')) return;
+    const data = new FormData(form);
+    const payload = { organization_id: state.membership.organization_id, name: text(data.get('name')), code: text(data.get('code'))?.toUpperCase(), address: text(data.get('address')), active: true };
+    if (!payload.name) { notify('Enter a branch name.', 'error'); return; }
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true; button.textContent = 'Saving…';
+    const result = await state.client.from('branches').insert(payload).select('id, name, code, address, active').single();
+    if (result.error) {
+      button.disabled = false; button.textContent = 'Save branch';
+      notify(errorText(result.error, 'Could not save the branch.'), 'error');
+      return;
+    }
+    state.branches = [...state.branches, result.data].sort((a, b) => a.name.localeCompare(b.name));
+    state.activeBranchId = result.data.id;
+    modal.close();
+    notify('Branch added. It is now selected.');
+    await refresh();
+  }
   async function addBus(form) {
     const data = new FormData(form);
     const payload = {
@@ -436,6 +476,8 @@
     if (!action) return;
     if (action === 'sign-out') signOut();
     if (action === 'open-add-bus') openBusModal();
+    if (action === 'open-add-branch') openBranchModal();
+    if (action === 'select-branch') { state.activeBranchId = event.target.closest('[data-branch-id]').dataset.branchId; refresh(); }
     if (action === 'refresh') refresh();
   });
   root.addEventListener('change', event => {
@@ -450,6 +492,7 @@
   });
   modal.addEventListener('click', event => { if (event.target.closest('[data-modal-action="close"]')) modal.close(); });
   modal.addEventListener('submit', event => { if (event.target.id === 'addBusForm') { event.preventDefault(); addBus(event.target); } });
+  modal.addEventListener('submit', event => { if (event.target.id === 'addBranchForm') { event.preventDefault(); addBranch(event.target); } });
 
   async function init() {
     if (!configured()) {
